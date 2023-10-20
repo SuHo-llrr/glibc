@@ -18,6 +18,11 @@
 
 #include <sysdep.h>
 #include <sys/asm.h>
+#include <jmp_buf-ssp.h>
+
+/*#if !Zicfiss_ENABLED
+# undef SHADOW_STACK_POINTER_OFFSET
+#endif*/
 
 ENTRY (__longjmp)
 	REG_L ra,  0*SZREG(a0)
@@ -48,6 +53,55 @@ ENTRY (__longjmp)
 	FREG_L fs9, 14*SZREG+ 9*SZFREG(a0)
 	FREG_L fs10,14*SZREG+10*SZFREG(a0)
 	FREG_L fs11,14*SZREG+11*SZFREG(a0)
+#endif
+
+#ifdef SHADOW_STACK_POINTER_OFFSET
+  /* t1 is current ssp
+     t2 is jmp_buf->saved_ssp */
+  ssrdp t1
+  beqz t1, L(skip_ssp)
+  REG_L t2, SHADOW_STACK_POINTER_OFFSET(a0)
+
+  /* following assembly C code
+
+    // ssp: ssrdp t1 (current_ssp)
+    // saved_ssp: jmp_buf->saved_ssp
+    while(saved_ssp > ssp) {
+      ssp = ((saved_ssp - ssp) >= 4096) ? ssp + 4096 : saved_ssp;
+      asm volatile("csrw 0x20, %0": : "r"(ssp));
+    }
+
+  */
+  bge t1, t2, L(skip_ssp)
+  li t3, 4096
+  li t4, 4095
+L(advance_ssp):
+
+#if __riscv_xlen == 64
+  subw t5, t2, t1
+#elif __riscv_xlen == 32
+  sub t5, t2, t1
+#endif
+  blt t4, t5, L(add_4096)
+  mv t1, t2
+  j L(update_ssp)
+
+L(add_4096):
+#if __riscv_xlen == 64
+  addw t1, t1, t3
+#elif __riscv_xlen == 32
+  add t1, t1, t3
+#endif
+L(update_ssp):
+  csrw 0x20, t1
+#if __riscv_xlen == 64
+  ssld t0
+#elif __riscv_xlen == 32
+  sslw t0
+#endif
+  blt t1, t2, L(advance_ssp)
+
+L(skip_ssp):
 #endif
 
 	seqz a0, a1

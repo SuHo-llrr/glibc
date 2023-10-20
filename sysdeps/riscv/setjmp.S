@@ -18,6 +18,11 @@
 
 #include <sysdep.h>
 #include <sys/asm.h>
+#include <jmp_buf-ssp.h>
+
+/*#if !Zicfiss_ENABLED
+# undef SHADOW_STACK_POINTER_OFFSET
+#endif*/
 
 ENTRY (_setjmp)
   li	a1, 0
@@ -56,6 +61,15 @@ ENTRY (__sigsetjmp)
 	FREG_S fs9, 14*SZREG+ 9*SZFREG(a0)
 	FREG_S fs10,14*SZREG+10*SZFREG(a0)
 	FREG_S fs11,14*SZREG+11*SZFREG(a0)
+#endif
+
+#ifdef SHADOW_STACK_POINTER_OFFSET
+  /* Read ssp and store to jmp_buf with SHADOW_STACK_POINTER_OFFSET*/
+  ssrdp t0
+  beqz t0, L(skip_ssp)
+  REG_S t0, SHADOW_STACK_POINTER_OFFSET(a0)
+
+L(skip_ssp):
 #endif
 
 #if !IS_IN (libc) && IS_IN (rtld)

@@ -11,3 +11,7 @@ ASFLAGS-.os += -Wa,-mno-relax
 ASFLAGS-.o += -Wa,-mno-relax
 sysdep-CFLAGS += -mno-relax
 endif
+
+ifeq ($(subdir),setjmp)
+gen-as-const-headers += jmp_buf-ssp.sym
+endif
